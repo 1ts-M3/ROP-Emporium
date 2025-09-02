@@ -175,9 +175,3 @@ x86_64
 Contriving a reason to ask user for data...
 > $
 ```
-
-# x86
-**Binary Protections:**
-```yaml
-
-```
