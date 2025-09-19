@@ -25,7 +25,7 @@ badchars: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linke
 ```
 <br />
 
-> [!WARNING]
+> [!Caution]
 > ```text
 > badchars are: 'x', 'g', 'a', '.'
 > ```
@@ -166,7 +166,7 @@ badchars32: ELF 32-bit LSB executable, Intel i386, version 1 (SYSV), dynamically
 ```
 <br />
 
-> [!WARNING]
+> [!Caution]
 > ```text
 > badchars are: 'x', 'g', 'a', '.'
 > ```
