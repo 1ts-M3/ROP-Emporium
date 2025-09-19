@@ -83,7 +83,7 @@ Disassembly of section .text:
 >                                                                 |------|
 > Output: 0000000000000000000000000000000000000000000000000000000011101110 = 0x00000000000000EE
 > ```
-> [stos](https://www.felixcloutier.com/x86/stos:stosb:stosw:stosd:stosq) 는 레지스터의 값을 메모리에 저장하고 , `rdi`를 자동으로 증가시키는 역할을 수행합니다. `stos` 종류에 따라 저장 단위와 증가량이 달라집니다.
+> [stos](https://www.felixcloutier.com/x86/stos:stosb:stosw:stosd:stosq) 는 레지스터의 값을 메모리에 저장하고, `rdi`를 자동으로 증가시키는 역할을 수행합니다. `stos` 종류에 따라 저장 단위와 증가량이 달라집니다.
 
 
 <br />
